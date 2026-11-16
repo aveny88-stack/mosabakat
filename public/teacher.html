@@ -5,7 +5,7 @@
     <title>لوحة المعلم - تعلم العربية للأجانب</title>
     <style>
         body { font-family: Tahoma, sans-serif; text-align: center; background-color: #f0f2f5; padding: 20px; }
-        .card { background: white; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 500px; text-align: right; margin-bottom: 20px; }
+        .card { background: white; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 500px; text-align: right; margin-bottom: 20px; vertical-align: top; }
         input, select, button { width: 100%; padding: 10px; margin: 8px 0; font-size: 15px; box-sizing: border-box; }
         button { background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
         button:hover { background-color: #45a049; }
@@ -13,6 +13,7 @@
         #pinDisplay { font-size: 28px; font-weight: bold; color: #ff5722; margin: 10px 0; }
         ul { list-style-type: none; padding: 0; }
         li { background: #e7f3fe; margin: 5px 0; padding: 8px; border-radius: 4px; text-align: right; }
+        .text-ans-item { background: #e8f5e9; border-right: 4px solid #2e7d32; margin: 6px 0; padding: 10px; border-radius: 4px; text-align: right; font-size: 15px; }
         .opt-box { border: 1px solid #ccc; padding: 10px; border-radius: 5px; margin-top: 10px; background: #fafafa; }
         .music-row { display: flex; gap: 5px; align-items: center; }
     </style>
@@ -76,7 +77,7 @@
         </div>
 
         <div class="opt-box" style="margin-top: 10px;">
-            <label><input type="checkbox" id="isSelfPaced"> <b>تفعيل نمط التعلم الذاتي الفردي</b></label>
+            <label><input type="checkbox" id="isSelfPaced" style="width:auto;"> <b>تفعيل نمط التعلم الذاتي الفردي</b></label>
         </div>
 
         <hr style="margin: 15px 0;">
@@ -88,10 +89,11 @@
             <option value="tf">صحيح أم خطأ (True / False)</option>
             <option value="arrange">تحدي ترتيب الجملة (Sentence Arrangement)</option>
             <option value="fill">ملء الفراغ بالكلمة المناسبة (Fill in the Blank)</option>
+            <option value="text">إجابة نصية مفتوحة - الاسم واللقب (Text Input)</option>
         </select>
 
-        <input type="text" id="questionText" placeholder="نص السؤال بالعربية (مثلاً: ما معنى كلمة كتاب؟)...">
-        <input type="text" id="questionTranslation" placeholder="Türkçe Çeviri / Açıklama (مثلاً: Kitap kelimesinin anlamı nedir?)...">
+        <input type="text" id="questionText" placeholder="نص السؤال بالعربية (مثلاً: اكتب اسمك الكامل ولقبك)...">
+        <input type="text" id="questionTranslation" placeholder="Türkçe Çeviri / Açıklama (مثلاً: Adınızı ve soyadınızı yazınız)...">
         
         <label>إرفع صورة معبرة من الحاسوب (اختياري):</label>
         <input type="file" id="imageFile" accept="image/*">
@@ -124,9 +126,14 @@
         <div id="fillOptions" style="display:none;">
             <input type="text" id="correctFill" placeholder="اكتب الكلمة الصحيحة التي تملأ الفراغ...">
         </div>
+
+        <!-- إجابة نصية مفتوحة -->
+        <div id="textOptions" style="display:none;" class="opt-box">
+            <p style="margin:0; color:#2e7d32; font-size:14px;">📝 سيظهر للطالب مربع نصي لكتابة إجابته بحرية (مثل الاسم واللقب)، وستصلك إجابته مباشرة في لوحة التحكم دون احتساب نقاط.</p>
+        </div>
         
         <label>الوقت المخصص (بالثواني):</label>
-        <input type="number" id="questionTime" value="25" min="5" max="60">
+        <input type="number" id="questionTime" value="25" min="5" max="120">
 
         <button onclick="addQuestion()">إضافة السؤال للقائمة</button>
         <p>الأسئلة الجاهزة: <span id="qCount">0</span></p>
@@ -138,6 +145,12 @@
         <h3>المسابقة جارية الآن...</h3>
         <p id="liveStatus">انتظار إجابات الطلاب</p>
         <button onclick="nextQuestionManual()" style="background-color: #00bcd4;">الانتقال للسؤال التالي يدويًا ➔</button>
+        
+        <div id="textAnswersBox" style="display:none; margin-top:15px; text-align:right;">
+            <hr>
+            <h4>📋 الإجابات النصية المستلمة من الطلاب:</h4>
+            <ul id="textAnswersList"></ul>
+        </div>
     </div>
 
     <div class="card center">
@@ -202,6 +215,7 @@
             document.getElementById('tfOptions').style.display = (type === 'tf') ? 'block' : 'none';
             document.getElementById('arrangeOptions').style.display = (type === 'arrange') ? 'block' : 'none';
             document.getElementById('fillOptions').style.display = (type === 'fill') ? 'block' : 'none';
+            document.getElementById('textOptions').style.display = (type === 'text') ? 'block' : 'none';
         }
 
         async function addQuestion() {
@@ -242,6 +256,8 @@
             } else if (type === 'fill') {
                 questionObj.correctFill = document.getElementById('correctFill').value.trim();
                 if (!questionObj.correctFill) { alert('أدخل الكلمة المناسبة للفراغ!'); return; }
+            } else if (type === 'text') {
+                questionObj.isOpenText = true;
             }
 
             questionsList.push(questionObj);
@@ -374,6 +390,19 @@
 
         socket.on('teacherQuestionView', (data) => {
             document.getElementById('liveStatus').innerText = `السؤال (${data.questionNumber}): ${data.text}`;
+            if (data.type === 'text') {
+                document.getElementById('textAnswersBox').style.display = 'block';
+                document.getElementById('textAnswersList').innerHTML = '';
+            }
+        });
+
+        socket.on('receiveTextAnswer', (data) => {
+            document.getElementById('textAnswersBox').style.display = 'block';
+            const list = document.getElementById('textAnswersList');
+            const li = document.createElement('li');
+            li.className = 'text-ans-item';
+            li.innerHTML = `<b>👤 ${data.playerName}:</b> ${data.answerText}`;
+            list.appendChild(li);
         });
     </script>
 </body>

@@ -5,7 +5,7 @@
     <title>منصة مسابقات العربية - شاشة الطالب</title>
     <style>
         body { font-family: Tahoma, sans-serif; text-align: center; background-color: #f0f2f5; padding: 20px; transition: background 0.5s; margin: 0; }
-        .card { background: white; padding: 25px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 500px; text-align: center; margin-top: 40px; }
+        .card { background: white; padding: 25px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 500px; max-width: 92%; text-align: center; margin-top: 40px; }
         input, button { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid #ccc; }
         button { background-color: #4CAF50; color: white; border: none; cursor: pointer; font-weight: bold; }
         button:hover { background-color: #45a049; }
@@ -40,7 +40,7 @@
         <div class="garden-box">حديقتك النباتية: <span id="myTree">🌱 بذور</span> | نقاطك: <span id="myScore">0</span></div>
     </div>
 
-    <div class="card" id="gameSection" style="display:none; width: 550px;">
+    <div class="card" id="gameSection" style="display:none; width: 550px; max-width: 94%;">
         <div id="timerBox">⏳ الوقت المتبقي: <span id="timeLeft">0</span> ثانية</div>
 
         <h3 id="qTitle">السؤال</h3>
@@ -60,7 +60,7 @@
         </div>
 
         <div id="textAnsContainer" style="display:none;">
-            <input type="text" id="textAnswerInput" placeholder="اكتب إجابتك هنا...">
+            <input type="text" id="textAnswerInput" placeholder="اكتب إجابتك هنا (مثلاً: الاسم واللقب)...">
             <button id="textSubmitBtn" onclick="sendTextAnswer()">إرسال الإجابة</button>
         </div>
 
@@ -162,61 +162,23 @@
                 document.getElementById('tfContainer').style.display = 'flex';
                 document.getElementById('tfTrueBtn').disabled = false;
                 document.getElementById('tfFalseBtn').disabled = false;
-            } else if (q.type === 'arrange' || q.type === 'fill') {
+            } else if (q.type === 'arrange' || q.type === 'fill' || q.type === 'text') {
                 document.getElementById('textAnsContainer').style.display = 'block';
-                document.getElementById('textAnswerInput').value = '';
-                document.getElementById('textAnswerInput').disabled = false;
-                document.getElementById('textSubmitBtn').disabled = false;
+                const textInput = document.getElementById('textAnswerInput');
+                const textBtn = document.getElementById('textSubmitBtn');
+                textInput.value = '';
+                textInput.placeholder = (q.type === 'text') ? 'اكتب الاسم واللقب أو إجابتك النصية هنا...' : 'اكتب إجابتك هنا...';
+                textInput.disabled = false;
+                textBtn.disabled = false;
+                textBtn.innerText = 'إرسال الإجابة';
             }
         });
 
         function sendAnswer(ans, btnElement) {
-            if (isTimeUp) return; // منع الاختيار إذا انتهى الزمن
+            if (isTimeUp) return;
             document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
             if (btnElement) btnElement.classList.add('selected');
             socket.emit('submitAnswer', { pin: currentPin, answer: ans });
         }
 
-        function sendTextAnswer() {
-            if (isTimeUp) return;
-            const val = document.getElementById('textAnswerInput').value.trim();
-            if (!val) return;
-            socket.emit('submitAnswer', { pin: currentPin, answer: val });
-            document.getElementById('textSubmitBtn').innerText = 'تم الإرسال ✓ (يمكنك التعديل قبل انتهاء الوقت)';
-        }
-
-        function disableAllInputs() {
-            for (let i = 0; i < 4; i++) {
-                const btn = document.getElementById(`btn${i}`);
-                if (btn) btn.disabled = true;
-            }
-            const tfTrue = document.getElementById('tfTrueBtn');
-            const tfFalse = document.getElementById('tfFalseBtn');
-            if (tfTrue) tfTrue.disabled = true;
-            if (tfFalse) tfFalse.disabled = true;
-
-            const textInput = document.getElementById('textAnswerInput');
-            const textBtn = document.getElementById('textSubmitBtn');
-            if (textInput) textInput.disabled = true;
-            if (textBtn) textBtn.disabled = true;
-        }
-
-        socket.on('scoreUpdate', (data) => {
-            document.getElementById('myScore').innerText = data.score;
-            document.getElementById('gameScore').innerText = data.score;
-            document.getElementById('myTree').innerText = data.treeState;
-            document.getElementById('gameTree').innerText = data.treeState;
-        });
-
-        socket.on('quizEnded', (data) => {
-            clearInterval(timerInterval);
-            isTimeUp = true;
-            document.getElementById('gameSection').style.display = 'none';
-            document.getElementById('resultSection').style.display = 'block';
-            document.getElementById('finalResultText').innerText = `مبروك! حصلت على مجموع نقاط: ${data.score}`;
-            document.getElementById('finalTreeState').innerText = data.treeState;
-            document.getElementById('bgMusic').pause();
-        });
-    </script>
-</body>
-</html>
+        function sendText
