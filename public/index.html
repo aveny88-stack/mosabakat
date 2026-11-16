@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>منصة مسابقات العربية - شاشة الطالب</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; text-align: center; background-color: #f0f2f5; padding: 20px; transition: background 0.5s; margin: 0; }
+        .card { background: white; padding: 25px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 500px; text-align: center; margin-top: 40px; }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid #ccc; }
+        button { background-color: #4CAF50; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #45a049; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .opt-btn { padding: 20px; font-size: 18px; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        #btn0 { background-color: #e21b3c; }
+        #btn1 { background-color: #1368ce; }
+        #btn2 { background-color: #d89e00; }
+        #btn3 { background-color: #26890c; }
+        .opt-btn:hover:not(:disabled) { opacity: 0.85; }
+        .selected { border: 4px solid #000 !important; transform: scale(0.97); }
+        #translationBox { background: #fff3cd; color: #856404; padding: 8px; border-radius: 6px; margin-bottom: 10px; font-size: 14px; border: 1px solid #ffeeba; display: none; }
+        .garden-box { margin-top: 15px; background: #e8f5e9; padding: 10px; border-radius: 8px; font-weight: bold; color: #2e7d32; }
+        #timerBox { font-size: 24px; font-weight: bold; color: #d32f2f; background: #ffebee; padding: 8px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #ffcdd2; }
+    </style>
+</head>
+<body id="pageBody">
+
+    <audio id="bgMusic" loop></audio>
+
+    <div class="card" id="joinSection">
+        <h2>انضم إلى المسابقة</h2>
+        <input type="text" id="playerName" placeholder="اسمك الكريم (Adınız)...">
+        <input type="text" id="roomPin" placeholder="رمز الغرفة PIN...">
+        <button onclick="joinRoom()">الدخول إلى التحدي</button>
+    </div>
+
+    <div class="card" id="waitSection" style="display:none;">
+        <h3>أهلاً بك يا <span id="displayName"></span>!</h3>
+        <p>انتظار بدء المعلم للمسابقة...</p>
+        <div class="garden-box">حديقتك النباتية: <span id="myTree">🌱 بذور</span> | نقاطك: <span id="myScore">0</span></div>
+    </div>
+
+    <div class="card" id="gameSection" style="display:none; width: 550px;">
+        <div id="timerBox">⏳ الوقت المتبقي: <span id="timeLeft">0</span> ثانية</div>
+
+        <h3 id="qTitle">السؤال</h3>
+        <div id="translationBox">🇹🇷 <span id="qTranslation"></span></div>
+        <div id="qImageContainer"></div>
+
+        <div id="mcqContainer" class="grid" style="display:none;">
+            <button class="opt-btn" id="btn0" onclick="sendAnswer(0, this)"></button>
+            <button class="opt-btn" id="btn1" onclick="sendAnswer(1, this)"></button>
+            <button class="opt-btn" id="btn2" onclick="sendAnswer(2, this)"></button>
+            <button class="opt-btn" id="btn3" onclick="sendAnswer(3, this)"></button>
+        </div>
+
+        <div id="tfContainer" style="display:none; gap:10px;">
+            <button id="tfTrueBtn" onclick="sendAnswer(true, this)" style="background-color: #2e7d32; font-size:20px; padding: 20px;">✅ صحيح (Doğru)</button>
+            <button id="tfFalseBtn" onclick="sendAnswer(false, this)" style="background-color: #c62828; font-size:20px; padding: 20px;">❌ خطأ (Yanlış)</button>
+        </div>
+
+        <div id="textAnsContainer" style="display:none;">
+            <input type="text" id="textAnswerInput" placeholder="اكتب إجابتك هنا...">
+            <button id="textSubmitBtn" onclick="sendTextAnswer()">إرسال الإجابة</button>
+        </div>
+
+        <div class="garden-box">حديقتك: <span id="gameTree">🌱 بذور</span> | النقاط: <span id="gameScore">0</span></div>
+    </div>
+
+    <div class="card" id="resultSection" style="display:none;">
+        <h2>انتهت المسابقة!</h2>
+        <p id="finalResultText"></p>
+        <div class="garden-box" style="font-size: 18px;">🌿 نتاج شتلتك الافتراضية: <span id="finalTreeState"></span></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let currentPin = '';
+        let myName = '';
+        let timerInterval = null;
+        let isTimeUp = false;
+
+        function joinRoom() {
+            myName = document.getElementById('playerName').value.trim();
+            currentPin = document.getElementById('roomPin').value.trim();
+            if (!myName || !currentPin) { alert('الرجاء إدخال الاسم ورمز الـ PIN!'); return; }
+            socket.emit('joinRoom', { name: myName, pin: currentPin });
+        }
+
+        socket.on('joinedSuccess', (data) => {
+            document.getElementById('joinSection').style.display = 'none';
+            document.getElementById('waitSection').style.display = 'block';
+            document.getElementById('displayName').innerText = myName;
+
+            if (data.music && data.music !== 'none') {
+                const bgMusic = document.getElementById('bgMusic');
+                bgMusic.src = data.music;
+                bgMusic.play().catch(e => console.log('Autoplay restricted'));
+            }
+            applyBackground(data.bgStyle);
+        });
+
+        socket.on('joinError', (msg) => { alert(msg); });
+
+        function applyBackground(style) {
+            const body = document.getElementById('pageBody');
+            if (style === 'color1') body.style.backgroundColor = '#e8f5e9';
+            else if (style === 'color2') body.style.backgroundColor = '#e3f2fd';
+            else if (style === 'spring') body.style.backgroundColor = '#c8e6c9';
+            else if (style === 'autumn') body.style.backgroundColor = '#ffe0b2';
+            else if (style === 'flowers') body.style.backgroundColor = '#fce4ec';
+        }
+
+        socket.on('newQuestion', (q) => {
+            document.getElementById('waitSection').style.display = 'none';
+            document.getElementById('gameSection').style.display = 'block';
+            document.getElementById('qTitle').innerText = q.text;
+
+            isTimeUp = false;
+            let remainingTime = q.time || 25;
+            document.getElementById('timeLeft').innerText = remainingTime;
+            clearInterval(timerInterval);
+
+            // العداد يستمر بالتناقص ولا يتوقف عند الإجابة
+            timerInterval = setInterval(() => {
+                remainingTime--;
+                document.getElementById('timeLeft').innerText = remainingTime;
+                if (remainingTime <= 0) {
+                    clearInterval(timerInterval);
+                    isTimeUp = true;
+                    disableAllInputs();
+                }
+            }, 1000);
+
+            const transBox = document.getElementById('translationBox');
+            if (q.translation) {
+                document.getElementById('qTranslation').innerText = q.translation;
+                transBox.style.display = 'block';
+            } else {
+                transBox.style.display = 'none';
+            }
+
+            const imgContainer = document.getElementById('qImageContainer');
+            imgContainer.innerHTML = q.image ? `<img src="${q.image}" style="max-width:100%; max-height:180px; border-radius:8px; margin-bottom:10px;">` : '';
+
+            document.getElementById('mcqContainer').style.display = 'none';
+            document.getElementById('tfContainer').style.display = 'none';
+            document.getElementById('textAnsContainer').style.display = 'none';
+
+            // إزالة التحديد السابق وتفعيل الأزرار
+            document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+
+            if (q.type === 'mcq') {
+                document.getElementById('mcqContainer').style.display = 'grid';
+                for (let i = 0; i < 4; i++) {
+                    const btn = document.getElementById(`btn${i}`);
+                    btn.innerText = q.options[i];
+                    btn.disabled = false;
+                }
+            } else if (q.type === 'tf') {
+                document.getElementById('tfContainer').style.display = 'flex';
+                document.getElementById('tfTrueBtn').disabled = false;
+                document.getElementById('tfFalseBtn').disabled = false;
+            } else if (q.type === 'arrange' || q.type === 'fill') {
+                document.getElementById('textAnsContainer').style.display = 'block';
+                document.getElementById('textAnswerInput').value = '';
+                document.getElementById('textAnswerInput').disabled = false;
+                document.getElementById('textSubmitBtn').disabled = false;
+            }
+        });
+
+        function sendAnswer(ans, btnElement) {
+            if (isTimeUp) return; // منع الاختيار إذا انتهى الزمن
+            document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+            if (btnElement) btnElement.classList.add('selected');
+            socket.emit('submitAnswer', { pin: currentPin, answer: ans });
+        }
+
+        function sendTextAnswer() {
+            if (isTimeUp) return;
+            const val = document.getElementById('textAnswerInput').value.trim();
+            if (!val) return;
+            socket.emit('submitAnswer', { pin: currentPin, answer: val });
+            document.getElementById('textSubmitBtn').innerText = 'تم الإرسال ✓ (يمكنك التعديل قبل انتهاء الوقت)';
+        }
+
+        function disableAllInputs() {
+            for (let i = 0; i < 4; i++) {
+                const btn = document.getElementById(`btn${i}`);
+                if (btn) btn.disabled = true;
+            }
+            const tfTrue = document.getElementById('tfTrueBtn');
+            const tfFalse = document.getElementById('tfFalseBtn');
+            if (tfTrue) tfTrue.disabled = true;
+            if (tfFalse) tfFalse.disabled = true;
+
+            const textInput = document.getElementById('textAnswerInput');
+            const textBtn = document.getElementById('textSubmitBtn');
+            if (textInput) textInput.disabled = true;
+            if (textBtn) textBtn.disabled = true;
+        }
+
+        socket.on('scoreUpdate', (data) => {
+            document.getElementById('myScore').innerText = data.score;
+            document.getElementById('gameScore').innerText = data.score;
+            document.getElementById('myTree').innerText = data.treeState;
+            document.getElementById('gameTree').innerText = data.treeState;
+        });
+
+        socket.on('quizEnded', (data) => {
+            clearInterval(timerInterval);
+            isTimeUp = true;
+            document.getElementById('gameSection').style.display = 'none';
+            document.getElementById('resultSection').style.display = 'block';
+            document.getElementById('finalResultText').innerText = `مبروك! حصلت على مجموع نقاط: ${data.score}`;
+            document.getElementById('finalTreeState').innerText = data.treeState;
+            document.getElementById('bgMusic').pause();
+        });
+    </script>
+</body>
+</html>
