@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>شاشة العرض (البروجكتر)</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, sans-serif; 
+            text-align: center; 
+            background: linear-gradient(135deg, #e8f5e9 0%, #e0f2f1 100%);
+            color: #1b4332; 
+            padding: 30px; 
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card { 
+            background: rgba(255, 255, 255, 0.92); 
+            padding: 35px; 
+            border-radius: 18px; 
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            width: 85%; 
+            max-width: 950px;
+        }
+        h1 { font-size: 34px; color: #2d6a4f; margin-bottom: 10px; }
+        h2 { font-size: 28px; color: #1b4332; margin: 20px 0; }
+        .hint-text { font-size: 20px; color: #52796f; margin-bottom: 15px; }
+        .q-image { max-width: 55%; max-height: 240px; object-fit: contain; border-radius: 12px; margin: 15px 0; border: 2px solid #d8f3dc; }
+        input, button { padding: 14px 20px; font-size: 20px; border-radius: 10px; margin: 10px; }
+        input { border: 2px solid #95d5b2; text-align: center; width: 260px; }
+        button { background-color: #2d6a4f; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #1b4332; }
+        
+        /* خيارات شاشة العرض */
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 25px; }
+        .disp-btn { padding: 24px; font-size: 22px; color: white; border: none; border-radius: 12px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .btn-0 { background-color: #d62828; }
+        .btn-1 { background-color: #1d3557; }
+        .btn-2 { background-color: #e09f3e; }
+        .btn-3 { background-color: #2a9d8f; }
+    </style>
+</head>
+<body>
+
+    <div class="card" id="connectCard">
+        <h1>شاشة العرض الفصلية 📺</h1>
+        <p style="color: #52796f; font-size: 18px;">أدخل رمز الغرفة الظاهر في لوحة المعلم</p>
+        <input type="text" id="pinInput" placeholder="رمز PIN المسابقة...">
+        <br>
+        <button onclick="connectDisplay()">ربط بالشاشة الرئيسية</button>
+    </div>
+
+    <div class="card" id="displayArea" style="display:none;">
+        <h1 id="screenTitle">المسابقة التفاعلية</h1>
+        <h2 id="screenQuestion">بانتظار انطلاق المسابقة...</h2>
+        <div id="screenHint" class="hint-text"></div>
+        <div id="screenImage"></div>
+        <div class="grid-container" id="screenOptions"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        function connectDisplay() {
+            const pin = document.getElementById('pinInput').value.trim();
+            if (!pin) {
+                alert('يرجى إدخال رمز PIN أولاً!');
+                return;
+            }
+            // إرسال طلب الربط بصيغتي الشاشة والغرفة لضمان التوافق مع الخادم
+            socket.emit('registerDisplay', pin);
+            socket.emit('joinRoom', { pin: pin, name: 'شاشة العرض 📺', isDisplay: true });
+        }
+
+        function showDisplayScreen() {
+            document.getElementById('connectCard').style.display = 'none';
+            document.getElementById('displayArea').style.display = 'block';
+        }
+
+        // الاستجابة لأي تأكيد نجاح من الخادم
+        socket.on('displayRegisteredSuccess', showDisplayScreen);
+        socket.on('joinedSuccess', showDisplayScreen);
+
+        // تنبيه في حال كان رمز PIN غير صحيح أو انتهت الجلسة
+        socket.on('errorMsg', (msg) => {
+            alert(msg);
+        });
+
+        socket.on('newQuestion', (data) => {
+            showDisplayScreen();
+            document.getElementById('screenTitle').innerText = `السؤال (${data.questionNumber}/${data.totalQuestions})`;
+            document.getElementById('screenQuestion').innerText = data.text;
+            document.getElementById('screenHint').innerText = data.hint ? `(${data.hint})` : '';
+            
+            document.getElementById('screenImage').innerHTML = data.image ? `<img src="${data.image}" class="q-image">` : '';
+
+            const container = document.getElementById('screenOptions');
+            container.innerHTML = '';
+            data.options.forEach((optText, index) => {
+                const div = document.createElement('div');
+                div.className = `disp-btn btn-${index}`;
+                div.innerText = optText;
+                container.appendChild(div);
+            });
+        });
+
+        socket.on('gameOver', (players) => {
+            let html = '<h1>🏆 أبطال المسابقة 🏆</h1><ol style="font-size:26px; text-align:right; line-height: 2;">';
+            players.slice(0, 3).forEach((p, idx) => {
+                let medal = idx === 0 ? '🥇 المركز الأول' : idx === 1 ? '🥈 المركز الثاني' : '🥉 المركز الثالث';
+                html += `<li>${medal}: <b>${p.name}</b> (${p.score} نقطة)</li>`;
+            });
+            html += '</ol>';
+            document.getElementById('displayArea').innerHTML = html;
+        });
+    </script>
+</body>
+</html>

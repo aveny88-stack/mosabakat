@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>لوحة المعلم - تعلم العربية للأجانب</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; text-align: center; background-color: #f0f2f5; padding: 20px; }
+        .card { background: white; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 500px; text-align: right; margin-bottom: 20px; }
+        input, select, button { width: 100%; padding: 10px; margin: 8px 0; font-size: 15px; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        .center { text-align: center; }
+        #pinDisplay { font-size: 28px; font-weight: bold; color: #ff5722; margin: 10px 0; }
+        ul { list-style-type: none; padding: 0; }
+        li { background: #e7f3fe; margin: 5px 0; padding: 8px; border-radius: 4px; text-align: right; }
+        .opt-box { border: 1px solid #ccc; padding: 10px; border-radius: 5px; margin-top: 10px; background: #fafafa; }
+        .music-row { display: flex; gap: 5px; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <audio id="previewAudio"></audio>
+
+    <div class="card center">
+        <h2>لوحة المعلم - لغة الضاد (Türkçe Destekli)</h2>
+        <button onclick="createRoom()">إنشاء غرفة جديدة (PIN)</button>
+        <div id="pinDisplay"></div>
+    </div>
+
+    <div class="card">
+        <h3>🗂️ أرشيف المسابقات والتحميل</h3>
+        <input type="text" id="saveQuizName" placeholder="اسم المسابقة (مثلاً: درس المفردات الأساسية)...">
+        <div style="display:flex; gap:5px;">
+            <button onclick="saveToArchive()" style="background-color: #2196F3;">حفظ للأرشيف</button>
+            <button onclick="exportQuizFile()" style="background-color: #673AB7;">تحميل كملف JSON</button>
+        </div>
+        
+        <label style="margin-top:10px; display:block;">استيراد مسابقة من الحاسوب:</label>
+        <input type="file" id="importFile" accept=".json" onchange="importQuizFile(event)">
+
+        <label style="margin-top:10px; display:block;">اختر مسابقة من الأرشيف:</label>
+        <select id="archiveSelect" onchange="loadFromArchive()">
+            <option value="">-- اختر مسابقة --</option>
+        </select>
+    </div>
+
+    <div class="card" id="quizSection" style="display:none;">
+        <h3>إعدادات المسابقة</h3>
+        <input type="text" id="quizTitle" placeholder="عنوان المسابقة (مثلاً: Türkçe Konuşanlar için Arapça)...">
+        
+        <label>خلفية الشاشات (ألوان ونباتات وفصول أربعة):</label>
+        <select id="bgStyle">
+            <option value="color1">أخضر ربيعي هادئ</option>
+            <option value="color2">أزرق سماوي خفيف</option>
+            <option value="spring">غابة الأشجار الخضراء</option>
+            <option value="autumn">خريف تساقط الأوراق</option>
+            <option value="flowers">زهور ونباتات منعشة</option>
+        </select>
+
+        <label>المقاطع الموسيقية الهادئة (معزوفات عالمية وياني):</label>
+        <div class="music-row">
+            <select id="quizMusic" style="flex: 3; margin: 0;">
+                <option value="none">بدون موسيقى</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3">1. أطباع ياني - سحر الأفق</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3">2. معزوفة Mon Amour الهادئة</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3">3. إيقاعات أكوستيك دافئة</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3">4. تأملات الـ Violins الهادئة</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3">5. نسيم الأكروبوليس (هارب)</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3">6. أعماق الذاكرة (تشيلو)</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3">7. ترانيم الصباح (ناي وأجراس)</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3">8. ألحان سينمائية هادئة</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3">9. استرخاء الغروب</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3">10. سيمفونية الطمأنينة</option>
+            </select>
+            <button type="button" onclick="previewMusic()" id="previewBtn" style="flex: 1; background-color: #00bcd4; margin: 0;">🔊 سماع</button>
+        </div>
+
+        <div class="opt-box" style="margin-top: 10px;">
+            <label><input type="checkbox" id="isSelfPaced"> <b>تفعيل نمط التعلم الذاتي الفردي</b></label>
+        </div>
+
+        <hr style="margin: 15px 0;">
+
+        <h3>إضافة أسئلة لتعلم العربية (للأجانب)</h3>
+        <label>نوع السؤال:</label>
+        <select id="qType" onchange="toggleQuestionType()">
+            <option value="mcq">اختيار من متعدد (Multiple Choice)</option>
+            <option value="tf">صحيح أم خطأ (True / False)</option>
+            <option value="arrange">تحدي ترتيب الجملة (Sentence Arrangement)</option>
+            <option value="fill">ملء الفراغ بالكلمة المناسبة (Fill in the Blank)</option>
+        </select>
+
+        <input type="text" id="questionText" placeholder="نص السؤال بالعربية (مثلاً: ما معنى كلمة كتاب؟)...">
+        <input type="text" id="questionTranslation" placeholder="Türkçe Çeviri / Açıklama (مثلاً: Kitap kelimesinin anlamı nedir?)...">
+        
+        <label>إرفع صورة معبرة من الحاسوب (اختياري):</label>
+        <input type="file" id="imageFile" accept="image/*">
+
+        <!-- خيارات متعددة -->
+        <div id="mcqOptions">
+            <input type="text" id="opt1" placeholder="الخيار الأول">
+            <input type="text" id="opt2" placeholder="الخيار الثاني">
+            <input type="text" id="opt3" placeholder="الخيار الثالث">
+            <input type="text" id="opt4" placeholder="الخيار الرابع">
+            <label>رقم الإجابة الصحيحة (1 إلى 4):</label>
+            <input type="number" id="correctOpt" min="1" max="4" value="1">
+        </div>
+
+        <!-- صحيح أو خطأ -->
+        <div id="tfOptions" style="display:none;">
+            <label>حدد الإجابة الصحيحة للعبارة:</label>
+            <select id="tfCorrect">
+                <option value="true">صحيح (True / Doğru)</option>
+                <option value="false">خطأ (False / Yanlış)</option>
+            </select>
+        </div>
+
+        <!-- ترتيب الجمل -->
+        <div id="arrangeOptions" style="display:none;">
+            <input type="text" id="correctSentence" placeholder="اكتب الجملة العربية الصحيحة بالترتيب...">
+        </div>
+
+        <!-- ملء الفراغ -->
+        <div id="fillOptions" style="display:none;">
+            <input type="text" id="correctFill" placeholder="اكتب الكلمة الصحيحة التي تملأ الفراغ...">
+        </div>
+        
+        <label>الوقت المخصص (بالثواني):</label>
+        <input type="number" id="questionTime" value="25" min="5" max="60">
+
+        <button onclick="addQuestion()">إضافة السؤال للقائمة</button>
+        <p>الأسئلة الجاهزة: <span id="qCount">0</span></p>
+        
+        <button onclick="startQuiz()" style="background-color: #ff9800; font-size:18px;">بدء المسابقة الآن!</button>
+    </div>
+
+    <div class="card center" id="liveControl" style="display:none;">
+        <h3>المسابقة جارية الآن...</h3>
+        <p id="liveStatus">انتظار إجابات الطلاب</p>
+        <button onclick="nextQuestionManual()" style="background-color: #00bcd4;">الانتقال للسؤال التالي يدويًا ➔</button>
+    </div>
+
+    <div class="card center">
+        <h3>الطلاب المتصلون ونمو شتلاتهم:</h3>
+        <ul id="playersList"><p>لا توجد طلاب متصلون...</p></ul>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let currentPin = '';
+        let questionsList = [];
+        let isPlayingPreview = false;
+
+        function createRoom() { socket.emit('createRoom'); }
+
+        socket.on('roomCreated', (data) => {
+            currentPin = data.pin;
+            document.getElementById('pinDisplay').innerText = `PIN: ${currentPin}`;
+            document.getElementById('quizSection').style.display = 'block';
+            loadArchiveList();
+        });
+
+        function previewMusic() {
+            const audio = document.getElementById('previewAudio');
+            const musicSelect = document.getElementById('quizMusic');
+            const btn = document.getElementById('previewBtn');
+            const selectedUrl = musicSelect.value;
+
+            if (selectedUrl === 'none') {
+                alert('الرجاء اختيار مقطوعة موسيقية أولاً للمعاينة!');
+                return;
+            }
+
+            if (isPlayingPreview) {
+                audio.pause();
+                audio.currentTime = 0;
+                isPlayingPreview = false;
+                btn.innerText = '🔊 سماع';
+                btn.style.backgroundColor = '#00bcd4';
+            } else {
+                audio.src = selectedUrl;
+                audio.play().then(() => {
+                    isPlayingPreview = true;
+                    btn.innerText = '⏸️ إيقاف المعاينة';
+                    btn.style.backgroundColor = '#e21b3c';
+                }).catch(e => {
+                    alert('تعذر تشغيل الملف الصوتي. تأكد من اتصال الإنترنت.');
+                });
+            }
+
+            audio.onended = function() {
+                isPlayingPreview = false;
+                btn.innerText = '🔊 سماع';
+                btn.style.backgroundColor = '#00bcd4';
+            };
+        }
+
+        function toggleQuestionType() {
+            const type = document.getElementById('qType').value;
+            document.getElementById('mcqOptions').style.display = (type === 'mcq') ? 'block' : 'none';
+            document.getElementById('tfOptions').style.display = (type === 'tf') ? 'block' : 'none';
+            document.getElementById('arrangeOptions').style.display = (type === 'arrange') ? 'block' : 'none';
+            document.getElementById('fillOptions').style.display = (type === 'fill') ? 'block' : 'none';
+        }
+
+        async function addQuestion() {
+            const type = document.getElementById('qType').value;
+            const text = document.getElementById('questionText').value;
+            const translation = document.getElementById('questionTranslation').value;
+            const imageInput = document.getElementById('imageFile');
+            const time = parseInt(document.getElementById('questionTime').value);
+
+            if (!text) { alert('أدخل نص السؤال!'); return; }
+
+            let questionObj = { type, text, translation, time };
+
+            let imageUrl = '';
+            if (imageInput.files.length > 0) {
+                const formData = new FormData();
+                formData.append('image', imageInput.files[0]);
+                const res = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                imageUrl = data.imageUrl;
+            }
+            questionObj.image = imageUrl;
+
+            if (type === 'mcq') {
+                questionObj.options = [
+                    document.getElementById('opt1').value,
+                    document.getElementById('opt2').value,
+                    document.getElementById('opt3').value,
+                    document.getElementById('opt4').value
+                ];
+                questionObj.correct = parseInt(document.getElementById('correctOpt').value) - 1;
+                if (questionObj.options.some(opt => !opt)) { alert('املأ جميع الخيارات الأربعة!'); return; }
+            } else if (type === 'tf') {
+                questionObj.correct = document.getElementById('tfCorrect').value === 'true';
+            } else if (type === 'arrange') {
+                questionObj.correctSentence = document.getElementById('correctSentence').value.trim();
+                if (!questionObj.correctSentence) { alert('أدخل الجملة الصحيحة!'); return; }
+            } else if (type === 'fill') {
+                questionObj.correctFill = document.getElementById('correctFill').value.trim();
+                if (!questionObj.correctFill) { alert('أدخل الكلمة المناسبة للفراغ!'); return; }
+            }
+
+            questionsList.push(questionObj);
+            document.getElementById('qCount').innerText = questionsList.length;
+            alert('تمت إضافة السؤال بنجاح!');
+
+            document.getElementById('questionText').value = '';
+            document.getElementById('questionTranslation').value = '';
+            document.getElementById('imageFile').value = '';
+            if (type === 'mcq') {
+                document.getElementById('opt1').value = '';
+                document.getElementById('opt2').value = '';
+                document.getElementById('opt3').value = '';
+                document.getElementById('opt4').value = '';
+            } else if (type === 'arrange') {
+                document.getElementById('correctSentence').value = '';
+            } else if (type === 'fill') {
+                document.getElementById('correctFill').value = '';
+            }
+        }
+
+        function saveToArchive() {
+            const name = document.getElementById('saveQuizName').value.trim();
+            if (!name) return alert('أدخل اسم المسابقة!');
+            if (questionsList.length === 0) return alert('لا توجد أسئلة!');
+
+            let archive = JSON.parse(localStorage.getItem('myQuizArchive') || '{}');
+            archive[name] = {
+                title: document.getElementById('quizTitle').value || name,
+                bgStyle: document.getElementById('bgStyle').value,
+                music: document.getElementById('quizMusic').value,
+                questions: questionsList
+            };
+            localStorage.setItem('myQuizArchive', JSON.stringify(archive));
+            alert('تم الحفظ في الأرشيف!');
+            loadArchiveList();
+        }
+
+        function loadArchiveList() {
+            let archive = JSON.parse(localStorage.getItem('myQuizArchive') || '{}');
+            let select = document.getElementById('archiveSelect');
+            select.innerHTML = '<option value="">-- اختر مسابقة --</option>';
+            for (let name in archive) {
+                let opt = document.createElement('option');
+                opt.value = name;
+                opt.innerText = name;
+                select.appendChild(opt);
+            }
+        }
+
+        function loadFromArchive() {
+            let name = document.getElementById('archiveSelect').value;
+            if (!name) return;
+            let archive = JSON.parse(localStorage.getItem('myQuizArchive') || '{}');
+            let quiz = archive[name];
+            if (quiz) {
+                document.getElementById('quizTitle').value = quiz.title;
+                document.getElementById('bgStyle').value = quiz.bgStyle;
+                document.getElementById('quizMusic').value = quiz.music;
+                questionsList = quiz.questions;
+                document.getElementById('qCount').innerText = questionsList.length;
+                alert(`تم استرجاع "${name}" بنجاح!`);
+            }
+        }
+
+        function exportQuizFile() {
+            if (questionsList.length === 0) return alert('لا توجد أسئلة!');
+            const quizData = {
+                title: document.getElementById('quizTitle').value || 'مسابقة لغة عربية',
+                bgStyle: document.getElementById('bgStyle').value,
+                music: document.getElementById('quizMusic').value,
+                questions: questionsList
+            };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(quizData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", (quizData.title + ".json"));
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importQuizFile(event) {
+            const file = event.target.files.length > 0 ? event.target.files[0] : null;
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const quizData = JSON.parse(e.target.result);
+                    document.getElementById('quizTitle').value = quizData.title || '';
+                    document.getElementById('bgStyle').value = quizData.bgStyle || 'color1';
+                    document.getElementById('quizMusic').value = quizData.music || 'none';
+                    questionsList = quizData.questions || [];
+                    document.getElementById('qCount').innerText = questionsList.length;
+                    alert('تم استيراد المسابقة بنجاح!');
+                } catch(err) { alert('ملف غير صالح!'); }
+            };
+            reader.readAsText(file);
+        }
+
+        function startQuiz() {
+            const audio = document.getElementById('previewAudio');
+            audio.pause();
+
+            const title = document.getElementById('quizTitle').value || 'مسابقة عربية للأجانب';
+            const bgStyle = document.getElementById('bgStyle').value;
+            const music = document.getElementById('quizMusic').value;
+            const isSelfPaced = document.getElementById('isSelfPaced').checked;
+
+            if (questionsList.length === 0) { alert('أضف سؤالاً واحداً على الأقل!'); return; }
+            socket.emit('startQuiz', { pin: currentPin, title, bgStyle, music, isSelfPaced, questions: questionsList });
+            document.getElementById('quizSection').style.display = 'none';
+            document.getElementById('liveControl').style.display = 'block';
+        }
+
+        function nextQuestionManual() { socket.emit('nextQuestionManual', currentPin); }
+
+        socket.on('updatePlayers', (players) => {
+            const list = document.getElementById('playersList');
+            list.innerHTML = '';
+            if (players.length === 0) { list.innerHTML = '<p>لا توجد طلاب متصلون...</p>'; return; }
+            players.forEach(p => {
+                const trees = ['🌱 بذور', '🌿 شتلة صغيرة', '🌳 شجرة نامية', '🌴 شجرة مثمرة', '🌲 غابة زاهية'];
+                const treeState = trees[p.treeLevel - 1] || trees[0];
+                const li = document.createElement('li');
+                li.innerText = `${p.name} | النقاط: ${p.score} | الحديقة: ${treeState}`;
+                list.appendChild(li);
+            });
+        });
+
+        socket.on('teacherQuestionView', (data) => {
+            document.getElementById('liveStatus').innerText = `السؤال (${data.questionNumber}): ${data.text}`;
+        });
+    </script>
+</body>
+</html>
