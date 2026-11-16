@@ -53,6 +53,17 @@ io.on('connection', (socket) => {
         socket.emit('roomCreated', { pin });
     });
 
+    // ربط شاشة العرض (البروجكتر) بالغرفة دون إضافتها كطالب
+    socket.on('registerDisplay', (pin) => {
+        const cleanPin = String(pin || '').trim();
+        if (rooms[cleanPin]) {
+            socket.join(cleanPin);
+            socket.emit('displayRegisteredSuccess');
+        } else {
+            socket.emit('errorMsg', 'رمز الغرفة (PIN) غير صحيح أو لم يتم إنشاء الغرفة بعد!');
+        }
+    });
+
     socket.on('startQuiz', (data) => {
         const { pin, title, bgStyle, music, isSelfPaced, questions } = data;
         if (rooms[pin]) {
@@ -70,19 +81,27 @@ io.on('connection', (socket) => {
     });
 
     socket.on('joinRoom', (data) => {
-        const { name, pin } = data;
-        if (rooms[pin]) {
-            rooms[pin].players[socket.id] = {
+        const { name, pin, isDisplay } = data;
+        const cleanPin = String(pin || '').trim();
+        if (rooms[cleanPin]) {
+            // إذا كان المتصل هو شاشة العرض، اربطه بالغرفة فقط دون إضافته لقائمة الطلاب
+            if (isDisplay) {
+                socket.join(cleanPin);
+                socket.emit('displayRegisteredSuccess');
+                return;
+            }
+
+            rooms[cleanPin].players[socket.id] = {
                 name: name,
                 score: 0,
                 treeLevel: 1
             };
-            socket.join(pin);
+            socket.join(cleanPin);
             socket.emit('joinedSuccess', {
-                bgStyle: rooms[pin].bgStyle,
-                music: rooms[pin].music
+                bgStyle: rooms[cleanPin].bgStyle,
+                music: rooms[cleanPin].music
             });
-            updateRoomPlayers(pin);
+            updateRoomPlayers(cleanPin);
         } else {
             socket.emit('joinError', 'رمز الغرفة غير صحيح!');
         }
@@ -94,8 +113,19 @@ io.on('connection', (socket) => {
         if (!room || !room.quizActive) return;
 
         const q = room.questions[room.currentQuestion];
-        let isCorrect = false;
+        const player = room.players[socket.id];
+        if (!player) return;
 
+        // إذا كان السؤال نصياً مفتوحاً (مثل الاسم واللقب)، أرسله مباشرة إلى لوحة المعلم
+        if (q.type === 'text') {
+            io.to(room.host).emit('receiveTextAnswer', {
+                playerName: player.name,
+                answerText: String(answer).trim()
+            });
+            return;
+        }
+
+        let isCorrect = false;
         if (q.type === 'mcq') {
             isCorrect = (parseInt(answer) === q.correct);
         } else if (q.type === 'tf') {
@@ -106,14 +136,18 @@ io.on('connection', (socket) => {
             isCorrect = (userAns === correctAns);
         }
 
-        const player = room.players[socket.id];
-        if (player && isCorrect) {
+        if (isCorrect) {
             player.score += 100;
             if (player.score >= 300 && player.score < 600) player.treeLevel = 2;
             else if (player.score >= 600 && player.score < 1000) player.treeLevel = 3;
             else if (player.score >= 1000 && player.score < 1500) player.treeLevel = 4;
             else if (player.score >= 1500) player.treeLevel = 5;
         }
+
+        socket.emit('scoreUpdate', {
+            score: player.score,
+            treeState: getTreeName(player.treeLevel)
+        });
         updateRoomPlayers(pin);
     });
 
@@ -125,10 +159,17 @@ io.on('connection', (socket) => {
             sendQuestionToRoom(pin);
         } else {
             room.quizActive = false;
-            io.to(pin).emit('quizEnded', {
-                score: room.players[socket.id]?.score || 0,
-                treeState: getTreeName(room.players[socket.id]?.treeLevel || 1)
-            });
+            // إرسال النتيجة النهائية لكل طالب بحسب نقاطه
+            for (let playerId in room.players) {
+                const p = room.players[playerId];
+                io.to(playerId).emit('quizEnded', {
+                    score: p.score,
+                    treeState: getTreeName(p.treeLevel)
+                });
+            }
+            // إرسال لوحة الشرف لشاشة العرض
+            const sortedPlayers = Object.values(room.players).sort((a, b) => b.score - a.score);
+            io.to(pin).emit('gameOver', sortedPlayers);
         }
     });
 
@@ -147,16 +188,19 @@ function sendQuestionToRoom(pin) {
     const q = room.questions[room.currentQuestion];
     io.to(pin).emit('newQuestion', {
         questionNumber: room.currentQuestion + 1,
+        totalQuestions: room.questions.length,
         total: room.questions.length,
         type: q.type,
         text: q.text,
         translation: q.translation,
-        options: q.options,
+        hint: q.translation,
+        options: q.options || [],
         image: q.image,
         time: q.time
     });
     io.to(room.host).emit('teacherQuestionView', {
         questionNumber: room.currentQuestion + 1,
+        type: q.type,
         text: q.text
     });
 }
@@ -177,6 +221,7 @@ function getTreeName(level) {
     return trees[level - 1] || trees[0];
 }
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-const PORT = process.env.PORT || 3001;});
+    console.log(`الخادم يعمل على المنفذ ${PORT}`);
+});
