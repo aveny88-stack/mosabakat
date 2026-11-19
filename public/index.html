@@ -8,7 +8,7 @@
         .card { background: white; padding: 25px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 500px; max-width: 92%; text-align: center; margin-top: 40px; }
         input, button { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; box-sizing: border-box; border-radius: 6px; border: 1px solid #ccc; }
         button { background-color: #4CAF50; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:hover { background-color: #45a049; }
+        button:hover:not(:disabled) { background-color: #45a049; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
         .opt-btn { padding: 20px; font-size: 18px; color: white; border: none; border-radius: 8px; cursor: pointer; }
@@ -21,6 +21,7 @@
         #translationBox { background: #fff3cd; color: #856404; padding: 8px; border-radius: 6px; margin-bottom: 10px; font-size: 14px; border: 1px solid #ffeeba; display: none; }
         .garden-box { margin-top: 15px; background: #e8f5e9; padding: 10px; border-radius: 8px; font-weight: bold; color: #2e7d32; }
         #timerBox { font-size: 24px; font-weight: bold; color: #d32f2f; background: #ffebee; padding: 8px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #ffcdd2; }
+        #statusMsg { color: #c62828; font-size: 14px; min-height: 20px; margin-top: 6px; }
     </style>
 </head>
 <body id="pageBody">
@@ -31,7 +32,8 @@
         <h2>انضم إلى المسابقة</h2>
         <input type="text" id="playerName" placeholder="اسمك الكريم (Adınız)...">
         <input type="text" id="roomPin" placeholder="رمز الغرفة PIN...">
-        <button onclick="joinRoom()">الدخول إلى التحدي</button>
+        <button id="joinBtn" onclick="joinRoom()">الدخول إلى التحدي</button>
+        <div id="statusMsg"></div>
     </div>
 
     <div class="card" id="waitSection" style="display:none;">
@@ -75,33 +77,147 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
+        const socket = (typeof io === 'function') ? io() : null;
         let currentPin = '';
         let myName = '';
         let timerInterval = null;
         let isTimeUp = false;
 
+        function setStatus(msg) {
+            const el = document.getElementById('statusMsg');
+            if (el) el.innerText = msg;
+        }
+
+        if (!socket) {
+            setStatus('تعذر تحميل مكتبة الاتصال بالخادم (Socket.io). تأكد من تشغيل الخادم بشكل صحيح.');
+        } else {
+            socket.on('connect', () => {
+                setStatus('');
+            });
+
+            socket.on('connect_error', () => {
+                setStatus('جاري محاولة الاتصال بالخادم... إذا استمر ذلك، انتظر قليلاً ثم أعد تحميل الصفحة.');
+            });
+
+            socket.on('joinedSuccess', (data) => {
+                document.getElementById('joinSection').style.display = 'none';
+                document.getElementById('waitSection').style.display = 'block';
+                document.getElementById('displayName').innerText = myName;
+
+                if (data && data.music && data.music !== 'none') {
+                    const bgMusic = document.getElementById('bgMusic');
+                    bgMusic.src = data.music;
+                    bgMusic.play().catch(() => {});
+                }
+                if (data && data.bgStyle) {
+                    applyBackground(data.bgStyle);
+                }
+            });
+
+            socket.on('joinError', (msg) => {
+                alert(msg);
+            });
+
+            socket.on('newQuestion', (q) => {
+                document.getElementById('waitSection').style.display = 'none';
+                document.getElementById('gameSection').style.display = 'block';
+                document.getElementById('qTitle').innerText = q.text;
+
+                isTimeUp = false;
+                let remainingTime = q.time || 25;
+                document.getElementById('timeLeft').innerText = remainingTime;
+                clearInterval(timerInterval);
+
+                timerInterval = setInterval(() => {
+                    remainingTime--;
+                    if (remainingTime < 0) remainingTime = 0;
+                    document.getElementById('timeLeft').innerText = remainingTime;
+                    if (remainingTime <= 0) {
+                        clearInterval(timerInterval);
+                        isTimeUp = true;
+                        disableAllInputs();
+                    }
+                }, 1000);
+
+                const transBox = document.getElementById('translationBox');
+                if (q.translation) {
+                    document.getElementById('qTranslation').innerText = q.translation;
+                    transBox.style.display = 'block';
+                } else {
+                    transBox.style.display = 'none';
+                }
+
+                const imgContainer = document.getElementById('qImageContainer');
+                imgContainer.innerHTML = q.image ? `<img src="${q.image}" style="max-width:100%; max-height:180px; border-radius:8px; margin-bottom:10px;">` : '';
+
+                document.getElementById('mcqContainer').style.display = 'none';
+                document.getElementById('tfContainer').style.display = 'none';
+                document.getElementById('textAnsContainer').style.display = 'none';
+
+                document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+
+                if (q.type === 'mcq') {
+                    document.getElementById('mcqContainer').style.display = 'grid';
+                    for (let i = 0; i < 4; i++) {
+                        const btn = document.getElementById(`btn${i}`);
+                        btn.innerText = (q.options && q.options[i]) ? q.options[i] : '';
+                        btn.disabled = false;
+                    }
+                } else if (q.type === 'tf') {
+                    document.getElementById('tfContainer').style.display = 'flex';
+                    document.getElementById('tfTrueBtn').disabled = false;
+                    document.getElementById('tfFalseBtn').disabled = false;
+                } else if (q.type === 'arrange' || q.type === 'fill' || q.type === 'text') {
+                    document.getElementById('textAnsContainer').style.display = 'block';
+                    const textInput = document.getElementById('textAnswerInput');
+                    const textBtn = document.getElementById('textSubmitBtn');
+                    textInput.value = '';
+                    textInput.placeholder = (q.type === 'text') ? 'اكتب الاسم واللقب أو إجابتك النصية هنا...' : 'اكتب إجابتك هنا...';
+                    textInput.disabled = false;
+                    textBtn.disabled = false;
+                    textBtn.innerText = 'إرسال الإجابة';
+                }
+            });
+
+            socket.on('updateScore', (data) => {
+                if (!data) return;
+                if (data.score !== undefined) {
+                    document.getElementById('myScore').innerText = data.score;
+                    document.getElementById('gameScore').innerText = data.score;
+                }
+                if (data.tree) {
+                    document.getElementById('myTree').innerText = data.tree;
+                    document.getElementById('gameTree').innerText = data.tree;
+                }
+            });
+
+            socket.on('quizEnded', (data) => {
+                clearInterval(timerInterval);
+                document.getElementById('gameSection').style.display = 'none';
+                document.getElementById('waitSection').style.display = 'none';
+                document.getElementById('resultSection').style.display = 'block';
+                if (data && data.message) {
+                    document.getElementById('finalResultText').innerText = data.message;
+                }
+                if (data && data.tree) {
+                    document.getElementById('finalTreeState').innerText = data.tree;
+                }
+            });
+        }
+
         function joinRoom() {
             myName = document.getElementById('playerName').value.trim();
             currentPin = document.getElementById('roomPin').value.trim();
-            if (!myName || !currentPin) { alert('الرجاء إدخال الاسم ورمز الـ PIN!'); return; }
+            if (!myName || !currentPin) {
+                alert('الرجاء إدخال الاسم ورمز الـ PIN!');
+                return;
+            }
+            if (!socket) {
+                alert('لا يوجد اتصال بالخادم حالياً. تأكد من فتح الصفحة من الخادم الصحيح.');
+                return;
+            }
             socket.emit('joinRoom', { name: myName, pin: currentPin });
         }
-
-        socket.on('joinedSuccess', (data) => {
-            document.getElementById('joinSection').style.display = 'none';
-            document.getElementById('waitSection').style.display = 'block';
-            document.getElementById('displayName').innerText = myName;
-
-            if (data.music && data.music !== 'none') {
-                const bgMusic = document.getElementById('bgMusic');
-                bgMusic.src = data.music;
-                bgMusic.play().catch(e => console.log('Autoplay restricted'));
-            }
-            applyBackground(data.bgStyle);
-        });
-
-        socket.on('joinError', (msg) => { alert(msg); });
 
         function applyBackground(style) {
             const body = document.getElementById('pageBody');
@@ -112,73 +228,37 @@
             else if (style === 'flowers') body.style.backgroundColor = '#fce4ec';
         }
 
-        socket.on('newQuestion', (q) => {
-            document.getElementById('waitSection').style.display = 'none';
-            document.getElementById('gameSection').style.display = 'block';
-            document.getElementById('qTitle').innerText = q.text;
-
-            isTimeUp = false;
-            let remainingTime = q.time || 25;
-            document.getElementById('timeLeft').innerText = remainingTime;
-            clearInterval(timerInterval);
-
-            // العداد يستمر بالتناقص ولا يتوقف عند الإجابة
-            timerInterval = setInterval(() => {
-                remainingTime--;
-                document.getElementById('timeLeft').innerText = remainingTime;
-                if (remainingTime <= 0) {
-                    clearInterval(timerInterval);
-                    isTimeUp = true;
-                    disableAllInputs();
-                }
-            }, 1000);
-
-            const transBox = document.getElementById('translationBox');
-            if (q.translation) {
-                document.getElementById('qTranslation').innerText = q.translation;
-                transBox.style.display = 'block';
-            } else {
-                transBox.style.display = 'none';
-            }
-
-            const imgContainer = document.getElementById('qImageContainer');
-            imgContainer.innerHTML = q.image ? `<img src="${q.image}" style="max-width:100%; max-height:180px; border-radius:8px; margin-bottom:10px;">` : '';
-
-            document.getElementById('mcqContainer').style.display = 'none';
-            document.getElementById('tfContainer').style.display = 'none';
-            document.getElementById('textAnsContainer').style.display = 'none';
-
-            // إزالة التحديد السابق وتفعيل الأزرار
-            document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
-
-            if (q.type === 'mcq') {
-                document.getElementById('mcqContainer').style.display = 'grid';
-                for (let i = 0; i < 4; i++) {
-                    const btn = document.getElementById(`btn${i}`);
-                    btn.innerText = q.options[i];
-                    btn.disabled = false;
-                }
-            } else if (q.type === 'tf') {
-                document.getElementById('tfContainer').style.display = 'flex';
-                document.getElementById('tfTrueBtn').disabled = false;
-                document.getElementById('tfFalseBtn').disabled = false;
-            } else if (q.type === 'arrange' || q.type === 'fill' || q.type === 'text') {
-                document.getElementById('textAnsContainer').style.display = 'block';
-                const textInput = document.getElementById('textAnswerInput');
-                const textBtn = document.getElementById('textSubmitBtn');
-                textInput.value = '';
-                textInput.placeholder = (q.type === 'text') ? 'اكتب الاسم واللقب أو إجابتك النصية هنا...' : 'اكتب إجابتك هنا...';
-                textInput.disabled = false;
-                textBtn.disabled = false;
-                textBtn.innerText = 'إرسال الإجابة';
-            }
-        });
-
         function sendAnswer(ans, btnElement) {
-            if (isTimeUp) return;
+            if (isTimeUp || !socket) return;
             document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
             if (btnElement) btnElement.classList.add('selected');
             socket.emit('submitAnswer', { pin: currentPin, answer: ans });
         }
 
-        function sendText
+        function sendTextAnswer() {
+            if (isTimeUp || !socket) return;
+            const input = document.getElementById('textAnswerInput');
+            const val = input.value.trim();
+            if (!val) return;
+            socket.emit('submitAnswer', { pin: currentPin, answer: val });
+            const btn = document.getElementById('textSubmitBtn');
+            btn.innerText = 'تم الإرسال ✓';
+        }
+
+        function disableAllInputs() {
+            for (let i = 0; i < 4; i++) {
+                const btn = document.getElementById(`btn${i}`);
+                if (btn) btn.disabled = true;
+            }
+            const tfTrue = document.getElementById('tfTrueBtn');
+            const tfFalse = document.getElementById('tfFalseBtn');
+            const textInput = document.getElementById('textAnswerInput');
+            const textBtn = document.getElementById('textSubmitBtn');
+            if (tfTrue) tfTrue.disabled = true;
+            if (tfFalse) tfFalse.disabled = true;
+            if (textInput) textInput.disabled = true;
+            if (textBtn) textBtn.disabled = true;
+        }
+    </script>
+</body>
+</html>
