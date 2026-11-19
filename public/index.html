@@ -89,14 +89,14 @@
         }
 
         if (!socket) {
-            setStatus('تعذر تحميل مكتبة الاتصال بالخادم (Socket.io). تأكد من تشغيل الخادم بشكل صحيح.');
+            setStatus('تعذر تحميل مكتبة الاتصال بالخادم (Socket.io).');
         } else {
             socket.on('connect', () => {
                 setStatus('');
             });
 
             socket.on('connect_error', () => {
-                setStatus('جاري محاولة الاتصال بالخادم... إذا استمر ذلك، انتظر قليلاً ثم أعد تحميل الصفحة.');
+                setStatus('جاري الاتصال بالخادم... انتظر قليلاً إذا كان الخادم في وضع السكون.');
             });
 
             socket.on('joinedSuccess', (data) => {
@@ -179,15 +179,15 @@
                 }
             });
 
-            socket.on('updateScore', (data) => {
+            socket.on('scoreUpdate', (data) => {
                 if (!data) return;
                 if (data.score !== undefined) {
                     document.getElementById('myScore').innerText = data.score;
                     document.getElementById('gameScore').innerText = data.score;
                 }
-                if (data.tree) {
-                    document.getElementById('myTree').innerText = data.tree;
-                    document.getElementById('gameTree').innerText = data.tree;
+                if (data.treeState) {
+                    document.getElementById('myTree').innerText = data.treeState;
+                    document.getElementById('gameTree').innerText = data.treeState;
                 }
             });
 
@@ -196,11 +196,11 @@
                 document.getElementById('gameSection').style.display = 'none';
                 document.getElementById('waitSection').style.display = 'none';
                 document.getElementById('resultSection').style.display = 'block';
-                if (data && data.message) {
-                    document.getElementById('finalResultText').innerText = data.message;
+                if (data && data.score !== undefined) {
+                    document.getElementById('finalResultText').innerText = `مجموع نقاطك: ${data.score}`;
                 }
-                if (data && data.tree) {
-                    document.getElementById('finalTreeState').innerText = data.tree;
+                if (data && data.treeState) {
+                    document.getElementById('finalTreeState').innerText = data.treeState;
                 }
             });
         }
@@ -213,10 +213,10 @@
                 return;
             }
             if (!socket) {
-                alert('لا يوجد اتصال بالخادم حالياً. تأكد من فتح الصفحة من الخادم الصحيح.');
+                alert('لا يوجد اتصال بالخادم حالياً.');
                 return;
             }
-            socket.emit('joinRoom', { name: myName, pin: currentPin });
+            socket.emit('joinRoom', { name: myName, pin: currentPin, isDisplay: false });
         }
 
         function applyBackground(style) {
